@@ -1,0 +1,2 @@
+#requirements-dev.txt
+micropython-rp2-rpi_pico_w-stubs==1.23.0.*

@@ -1,0 +1,8 @@
+{
+	"python.languageServer": "Pylance",
+	"python.analysis.typeCheckingMode": "basic",
+	"python.analysis.typeshedPaths": ["typings", ".venv/Lib/site-package"],
+	"python.analysis.diagnosticSeverityOverrides": {
+		"reportMissingModuleSource": "none"
+	}
+}
