@@ -162,3 +162,9 @@ cython_debug/
 # Pylance typings
 **/typings/
 **/.pyi
+
+# Ignore JSON config files with sensitive data
+config.json
+secrets.json
+*.dev.json
+*.prod.json

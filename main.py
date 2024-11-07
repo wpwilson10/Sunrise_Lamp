@@ -3,39 +3,7 @@ import urequests
 import machine
 import ntptime
 import time
-
-# WiFi credentials
-SSID: str = "xxxxxxxx"
-PASSWORD: str = "yyyyyyyyy"
-
-# CURRENT LOCATION
-LATITUDE: float = 89.123
-LONGITUDE: float = -89.987
-
-# Schedule times - as number of seconds since midnight
-UPDATE_TIME: int = 14400  # 4:00 AM
-SUNRISE_TIME: int = 25200  # 7:00 AM
-DAYTIME_TIME: int = 27000  # 7:30 AM
-SUNSET_TIME: int = (
-    70200  # 7:30 PM or local sunset time as calculated in update_sunset_time()
-)
-BED_TIME: int = 82800  # 11:00 PM
-
-# Time corrections - will be set by update_current_time
-TIMEZONE_OFFSET: int = (
-    0  # number of seconds to add/subtract from UTC to get central time
-)
-DST_OFFSET: int = (
-    0  # number of seconds to add/substract to correct for daylight savings
-)
-
-# Constants
-FREQUENCY: int = (
-    8000  # 8 kHz frequency. 3 kHz = IEEE 1789 standard recommmended frequency for no human perception
-)
-MAX_DUTY_CYCLE: int = 65535  # number of duty cycle levels available to Pi Pico
-WARM_LED_PIN: int = 10  # GPIO
-COOL_LED_PIN: int = 20  # GPIO
+from config import CONFIG
 
 # Setup Outputs and PWMs globally
 warm = machine.PWM(machine.Pin(WARM_LED_PIN))
@@ -50,7 +18,7 @@ def connect_wifi():
     wlan.active(True)
     if not wlan.isconnected():
         print("Connecting to network...")
-        wlan.connect(SSID, PASSWORD)
+        wlan.connect(CONFIG["WIFI"]["SSID"], CONFIG["WIFI"]["PASSWORD"])
         while not wlan.isconnected():
             pass
     print("Network connected!")
@@ -62,11 +30,8 @@ def get_manual_settings():
     # See the project directory on PatrickSR0 under Projects/LampServer for more info
 
     try:
-        # Replace with the URL of your local file
-        url = "http://localhost:8089/settings.txt"
-
         # Fetch the file
-        response = urequests.get(url)
+        response = urequests.get(CONFIG["URL"]["LOCAL_SETTINGS"])
         data = str(response.text)
         response.close()
 
