@@ -163,8 +163,5 @@ cython_debug/
 **/typings/
 **/.pyi
 
-# Ignore JSON config files with sensitive data
-config.json
-secrets.json
-*.dev.json
-*.prod.json
+# Ignore config files with sensitive data
+config.py
