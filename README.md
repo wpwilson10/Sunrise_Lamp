@@ -9,3 +9,7 @@ For VSCode typings and error checking to work correctly with MicroPython, setup 
 -   https://micropython-stubs.readthedocs.io/en/main/index.html
 
 The requirements-dev.txt is a recommended house keeping file from that process. The .vscode folder contains the VSCode workspace setting overrides.
+
+# Configuration
+
+Copy the config.template.py into a config.py file in the root directory and update with preferred settings.

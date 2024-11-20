@@ -4,5 +4,7 @@
 	"python.analysis.typeshedPaths": ["typings", ".venv/Lib/site-package"],
 	"python.analysis.diagnosticSeverityOverrides": {
 		"reportMissingModuleSource": "none"
-	}
+	},
+	"python.analysis.inlayHints.variableTypes": true,
+	"python.analysis.inlayHints.functionReturnTypes": true
 }
