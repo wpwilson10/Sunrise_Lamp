@@ -30,6 +30,25 @@ def connect_wifi():
     print("IP Address:", wlan.ifconfig()[0])
 
 
+def post_log_aws(message: str):
+    # Sends the given string to an AWS Lambda endpoint
+    #   which then saves the message to CloudWatch Logs
+
+    # Define Lambda URL and pre-shared token
+    headers = {
+        "Content-Type": "application/json",
+        "X-Custom-Auth": config.AWS_SECRET_TOKEN,  # Pre-shared token
+    }
+
+    # Prepare log data
+    log_data = {"message": message}
+
+    # Send log data
+    response = urequests.post(config.AWS_LOG_URL, json=log_data, headers=headers)
+    print("Response:", response.text)
+    response.close()
+
+
 def get_manual_settings():
     # Checks if there are manual settings setup configured on the remote server
     # See the project directory on PatrickSR0 under Projects/LampServer for more info

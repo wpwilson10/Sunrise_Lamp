@@ -13,3 +13,5 @@ The requirements-dev.txt is a recommended house keeping file from that process. 
 # Configuration
 
 Copy the config.template.py into a config.py file in the root directory and update with preferred settings.
+
+For logging to AWS, there needs to be an AWS Lambda function configured with a URL endpoint and a secret token environment variable configured that matches the value in the config.py file.
