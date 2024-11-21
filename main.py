@@ -4,6 +4,7 @@ import machine
 import ntptime
 import time
 import config
+import logging
 
 # Setup Outputs and PWMs globally
 warm = machine.PWM(machine.Pin(config.WARM_LED_PIN))
@@ -26,8 +27,8 @@ def connect_wifi():
         wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
         while not wlan.isconnected():
             pass
-    print("Network connected!")
-    print("IP Address:", wlan.ifconfig()[0])
+    logging.info(f"Connected to network. SSID: {config.WIFI_SSID}")
+    logging.info(f"IP Address: {wlan.ifconfig()[0]}")
 
 
 def post_log_aws(message: str):
@@ -158,7 +159,7 @@ def seconds_since_midnight() -> int:
     corrected_time = time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
     local_time = time.localtime(corrected_time)
     seconds_since_midnight = local_time[3] * 3600 + local_time[4] * 60 + local_time[5]
-    print(f"Current time in seconds since midnight: {seconds_since_midnight}")
+    logging.info(f"Current time in seconds since midnight: {seconds_since_midnight}")
 
     return seconds_since_midnight
 
@@ -283,6 +284,11 @@ def run_scheduled_tasks():
 
 try:
     night_light()  # start at dim setting
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s | %(asctime)s | %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+    )
     connect_wifi()
     # If there are manual override settings, use them
     get_manual_settings()
