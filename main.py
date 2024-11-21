@@ -4,7 +4,6 @@ import machine
 import ntptime
 import time
 import config
-import logging
 
 # Setup Outputs and PWMs globally
 warm = machine.PWM(machine.Pin(config.WARM_LED_PIN))
@@ -23,67 +22,46 @@ def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     if not wlan.isconnected():
+        # can't log if not connected
         print("Connecting to network...")
         wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
         while not wlan.isconnected():
             pass
-    logging.info(f"Connected to network. SSID: {config.WIFI_SSID}")
-    logging.info(f"IP Address: {wlan.ifconfig()[0]}")
+    log_to_aws(message=f"Connected to network. SSID: {config.WIFI_SSID}", level="INFO")
+    log_to_aws(message=f"IP Address: {wlan.ifconfig()[0]}", level="INFO")
 
 
-def post_log_aws(message: str):
-    # Sends the given string to an AWS Lambda endpoint
-    #   which then saves the message to CloudWatch Logs
+def log_to_aws(message: str, level: str = "INFO") -> None:
+    """
+    Sends a log message with a specified level to an AWS Lambda URL endpoint.
 
-    # Define Lambda URL and pre-shared token
-    headers = {
+    Args:
+        message (str): The log message to send.
+        level (str): The log level (e.g., INFO, ERROR, DEBUG). Default is INFO.
+    """
+    # Print to console for legibilty
+    print(f"{level} | {message}")
+
+    # Prepare the headers and payload
+    headers: dict[str, str] = {
         "Content-Type": "application/json",
-        "X-Custom-Auth": config.AWS_SECRET_TOKEN,  # Pre-shared token
+        "X-Custom-Auth": config.AWS_SECRET_TOKEN,
     }
-
-    # Prepare log data
-    log_data = {"message": message}
-
-    # Send log data
-    response = urequests.post(config.AWS_LOG_URL, json=log_data, headers=headers)
-    print("Response:", response.text)
-    response.close()
-
-
-def get_manual_settings():
-    # Checks if there are manual settings setup configured on the remote server
-    # See the project directory on PatrickSR0 under Projects/LampServer for more info
+    payload: dict[str, str] = {"message": message, "level": level}
 
     try:
-        response = urequests.get(config.LOCAL_SETTINGS_URL)
-        data = str(response.text)
-        response.close()
-
+        # Send the POST request to the Lambda URL
+        response = urequests.post(config.AWS_LOG_URL, json=payload, headers=headers)
+        # Check the response status
         if response.status_code == 200:
-            print("File found! Contents:")
-            print(data)
-        else:
-            print(f"Failed to retrieve file, status code: {response.status_code}")
-            return
-
-        data = data.strip()
-
-        if len(data) == 0 or "-1,-1" in data:
-            # empty or default settings, run normal program
+            print("Log sent successfully:", response.text)
             return
         else:
-            # if manual settings exist, use them for next 12 hours
-            data = data.split(",")
-            cool_override, warm_override = float(data[0]), float(data[1])
-
-            cool.duty_u16(get_duty_for_brightness(float(cool_override)))
-            warm.duty_u16(get_duty_for_brightness(float(warm_override)))
-            print(f"Manual: Cool = {cool_override}, Warm = {warm_override}")
-
-            time.sleep(12 * 60 * 60)  # sleep 12 hours
-
+            print("Failed to send log. Status code:", response.status_code)
+            return
     except Exception as e:
-        print("Failed to fetch override settings from local server:", e)
+        print("Error sending log:", str(e))
+        return
 
 
 def update_current_time():
@@ -105,11 +83,13 @@ def update_current_time():
         TIMEZONE_OFFSET_CALCULATED = data["raw_offset"]
         DST_OFFSET_CALCULATED = data["dst_offset"]
 
-        print("UTC:", time.time())
-        print("TZ Offset:", TIMEZONE_OFFSET_CALCULATED)
-        print("DST Offset:", DST_OFFSET_CALCULATED)
+        log_to_aws(message=f"UTC: {time.time()}", level="INFO")
+        log_to_aws(message=f"TZ Offset: {TIMEZONE_OFFSET_CALCULATED}", level="INFO")
+        log_to_aws(message=f"DST Offset: {DST_OFFSET_CALCULATED}", level="INFO")
     except Exception as e:
-        print("Failed to fetch or parse time from API:", e)
+        log_to_aws(
+            message=f"Failed to fetch or parse time from API: {e}", level="ERROR"
+        )
 
 
 def update_sunset_time():
@@ -123,43 +103,57 @@ def update_sunset_time():
         f"&lng={config.LONGITUDE}&tzid=America/Chicago&formatted=0"
     )
 
-    response = urequests.get(url)
-    data = response.json()
-    response.close()
+    try:
+        response = urequests.get(url)
+        data = response.json()
+        response.close()
 
-    if data["status"] == "OK":
-        # Extract sunset time from the response
-        sunset_time = data["results"]["sunset"]
-        # The time format is "HH:MM:SS AM/PM", we need to convert this to seconds since midnight
+        if data["status"] == "OK":
+            # Extract sunset time from the response
+            sunset_time = data["results"]["sunset"]
+            # The time format is "HH:MM:SS AM/PM", we need to convert this to seconds since midnight
 
-        # Parsing time, remove timezone part if there
-        time_part = sunset_time.split("T")[1]
-        time_str = time_part.split("-")[0]  # Remove the timezone offset "-05:00"
-        time_str = time_str.split("+")[
-            0
-        ]  # Safety check in case of a '+' timezone offset
+            # Parsing time, remove timezone part if there
+            time_part = sunset_time.split("T")[1]
+            time_str = time_part.split("-")[0]  # Remove the timezone offset "-05:00"
+            time_str = time_str.split("+")[
+                0
+            ]  # Safety check in case of a '+' timezone offset
 
-        # Splitting the time into components
-        hours, minutes, seconds = map(int, time_str.split(":"))
+            # Splitting the time into components
+            hours, minutes, seconds = map(int, time_str.split(":"))
 
-        # Calculate total seconds since midnight
-        sunset_seconds = hours * 3600 + minutes * 60 + seconds
+            # Calculate total seconds since midnight
+            sunset_seconds = hours * 3600 + minutes * 60 + seconds
 
-        SUNSET_TIME_CALCULATED = max(config.SUNSET_TIME, sunset_seconds)
-        print("Real Sunset time:", sunset_seconds)
-        print("SUNSET_TIME:", SUNSET_TIME_CALCULATED)
-    else:
-        print("Failed to fetch or parse time from api.sunrise-sunset.org.")
+            SUNSET_TIME_CALCULATED = max(config.SUNSET_TIME, sunset_seconds)
+            log_to_aws(message=f"Real Sunset time: {sunset_seconds}", level="INFO")
+            log_to_aws(message=f"SUNSET_TIME: {SUNSET_TIME_CALCULATED}", level="INFO")
+        else:
+            log_to_aws(
+                message="Failed to fetch or parse time from api.sunrise-sunset.org.",
+                level="ERROR",
+            )
+    except Exception as e:
+        log_to_aws(message=f"Error updating sunset time: {e}", level="ERROR")
 
 
 def seconds_since_midnight() -> int:
     # Calculates number of seconds since midnight for the local time
     # using previously set RTC and corrections
 
-    corrected_time = time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
+    corrected_time: int = (
+        time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
+    )
     local_time = time.localtime(corrected_time)
-    seconds_since_midnight = local_time[3] * 3600 + local_time[4] * 60 + local_time[5]
-    logging.info(f"Current time in seconds since midnight: {seconds_since_midnight}")
+    seconds_since_midnight: int = (
+        local_time[3] * 3600 + local_time[4] * 60 + local_time[5]
+    )
+
+    log_to_aws(
+        message=f"Current time in seconds since midnight: {seconds_since_midnight}",
+        level="DEBUG",
+    )
 
     return seconds_since_midnight
 
@@ -174,7 +168,11 @@ def get_duty_for_brightness(v_out: float) -> int:
 
 def night_light():
     # Dim warm light
-    print("NIGHTLIGHT")
+    log_to_aws(
+        message="Starting night light mode",
+        level="DEBUG",
+    )
+
     warm.duty_u16(get_duty_for_brightness(0.25))
     cool.duty_u16(0)
 
@@ -186,9 +184,13 @@ def sunrise():
     # Start from night light settings
     cool.duty_u16(0)
     warm.duty_u16(get_duty_for_brightness(0.25))
-    print("SUNRISE")
 
     time.sleep(diff_time(config.SUNRISE_TIME))
+
+    log_to_aws(
+        message="Starting sunrise mode",
+        level="DEBUG",
+    )
 
     for brightness in range(250, 1000, 1):
         warm.duty_u16(get_duty_for_brightness(brightness / 1000))
@@ -201,9 +203,13 @@ def daylight():
 
     cool.duty_u16(0)
     warm.duty_u16(get_duty_for_brightness(1))
-    print("DAYLIGHT")
 
     time.sleep(diff_time(config.DAYTIME_TIME))
+
+    log_to_aws(
+        message="Starting daylight mode",
+        level="DEBUG",
+    )
 
     for brightness in range(1000):
         cool.duty_u16(get_duty_for_brightness(brightness / 1000))
@@ -219,10 +225,14 @@ def sunset():
     # But this is nice when restarting during the day
     warm.duty_u16(get_duty_for_brightness(0.75))
     cool.duty_u16(get_duty_for_brightness(1))
-    print("SUNSET")
 
     # use the updated sunset time
     time.sleep(diff_time(SUNSET_TIME_CALCULATED))
+
+    log_to_aws(
+        message="Starting sunset mode",
+        level="DEBUG",
+    )
 
     for brightness in range(1000):
         cool.duty_u16(get_duty_for_brightness((1000 - brightness) / 1000))
@@ -239,9 +249,13 @@ def bed_time():
     # But this is nice when restarting during the evening
     warm.duty_u16(get_duty_for_brightness(1))
     cool.duty_u16(0)
-    print("BEDTIME")
 
     time.sleep(diff_time(config.BED_TIME))
+
+    log_to_aws(
+        message="Starting bedtime mode",
+        level="DEBUG",
+    )
 
     for brightness in range(1000, 250, -1):
         warm.duty_u16(get_duty_for_brightness(brightness / 1000))
@@ -284,14 +298,10 @@ def run_scheduled_tasks():
 
 try:
     night_light()  # start at dim setting
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s | %(asctime)s | %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%SZ",
-    )
+
+    # Network setup
     connect_wifi()
-    # If there are manual override settings, use them
-    get_manual_settings()
+
     # Initial time fetch and calculations
     update_current_time()
     update_sunset_time()
@@ -307,7 +317,18 @@ try:
 
     # start lighting cycle
     run_scheduled_tasks()
+
 except KeyboardInterrupt:
+    # we can hope this gets logged correctly
+    log_to_aws(
+        message="System resetting due to Keyboard Interrupt",
+        level="INFO",
+    )
+
     machine.reset()
 except Exception as e:
-    print("Unknown error:", e)
+    # we can hope this gets logged correctly
+    log_to_aws(
+        message=f"Unknown error in main: {e}",
+        level="ERROR",
+    )
