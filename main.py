@@ -1,4 +1,3 @@
-from typing import Generator, Optional
 import network
 import urequests
 import machine
@@ -31,8 +30,9 @@ def connect_wifi():
     wifi_connection.active(True)
 
     while not wifi_connection.isconnected():
+        print("Attempting to connect to network.")
         wifi_connection.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
-        time.sleep(1)
+        time.sleep(5)
 
     log_to_aws(message=f"Connected to network. SSID: {config.WIFI_SSID}", level="INFO")
     log_to_aws(message=f"IP Address: {wifi_connection.ifconfig()[0]}", level="INFO")
@@ -59,6 +59,7 @@ def log_to_aws(message: str, level: str = "INFO") -> None:
     try:
         # Send the POST request to the Lambda URL
         response = urequests.post(config.AWS_LOG_URL, json=payload, headers=headers)
+        response.close()
         # Check the response status
         if response.status_code == 200:
             print("Log sent successfully:", response.text)
@@ -86,6 +87,9 @@ def update_current_time():
         )
         data = response.json()
         response.close()
+
+        global TIMEZONE_OFFSET_CALCULATED
+        global DST_OFFSET_CALCULATED
 
         TIMEZONE_OFFSET_CALCULATED = data["raw_offset"]
         DST_OFFSET_CALCULATED = data["dst_offset"]
@@ -149,10 +153,14 @@ def seconds_since_midnight() -> int:
     # Calculates number of seconds since midnight for the local time
     # using previously set RTC and corrections
 
-    corrected_time: int = (
-        time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
-    )
+    corrected_time = time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
+    print("time", time.time())
+    print(TIMEZONE_OFFSET_CALCULATED, DST_OFFSET_CALCULATED)
+    print("Corrected time:", corrected_time)
+
     local_time = time.localtime(corrected_time)
+    print("Local time:", local_time)
+
     seconds_since_midnight: int = (
         local_time[3] * 3600 + local_time[4] * 60 + local_time[5]
     )
@@ -173,9 +181,7 @@ def get_duty_for_brightness(v_out: float) -> int:
     return round(config.MAX_DUTY_CYCLE * v_out**2.2)
 
 
-def generate_brightness_steps(
-    start: int, stop: int, duration: int
-) -> Generator[tuple[int, float], None, None]:
+def generate_brightness_steps(start: int, stop: int, duration: int):
     """
     Generates brightness values and delays for a smooth transition.
 
@@ -213,16 +219,16 @@ def night_light():
 def sunrise():
     # Warm lights increase to full warm brightness.
 
+    log_to_aws(
+        message="Starting sunrise mode",
+        level="DEBUG",
+    )
+
     # Start from night light settings
     cool.duty_u16(0)
     warm.duty_u16(get_duty_for_brightness(0.25))
 
     time.sleep(diff_time(config.SUNRISE_TIME))
-
-    log_to_aws(
-        message="Starting sunrise mode",
-        level="DEBUG",
-    )
 
     for brightness, delay in generate_brightness_steps(
         start=250, stop=1000, duration=30 * 60
@@ -238,15 +244,15 @@ def daylight():
     # Switch to cooler light and full combined brightness
     # 30 minute cycle
 
-    cool.duty_u16(0)
-    warm.duty_u16(get_duty_for_brightness(1))
-
-    time.sleep(diff_time(config.DAYTIME_TIME))
-
     log_to_aws(
         message="Starting daylight mode",
         level="DEBUG",
     )
+
+    cool.duty_u16(0)
+    warm.duty_u16(get_duty_for_brightness(1))
+
+    time.sleep(diff_time(config.DAYTIME_TIME))
 
     for brightness, delay in generate_brightness_steps(
         start=0, stop=1000, duration=30 * 60
@@ -264,16 +270,17 @@ def sunset():
     # Setting brightness is reduant when scheduled routines are running
     # as they will have already set the correct brightness
     # But this is nice when restarting during the day
-    warm.duty_u16(get_duty_for_brightness(0.75))
-    cool.duty_u16(get_duty_for_brightness(1))
-
-    # use the updated sunset time
-    time.sleep(diff_time(SUNSET_TIME_CALCULATED))
 
     log_to_aws(
         message="Starting sunset mode",
         level="DEBUG",
     )
+
+    warm.duty_u16(get_duty_for_brightness(0.75))
+    cool.duty_u16(get_duty_for_brightness(1))
+
+    # use the updated sunset time
+    time.sleep(diff_time(SUNSET_TIME_CALCULATED))
 
     for brightness, delay in generate_brightness_steps(
         start=1000, stop=0, duration=30 * 60
@@ -289,6 +296,11 @@ def bed_time():
     # Dim to night light
     # 30 minute cycle
 
+    log_to_aws(
+        message="Starting bedtime mode",
+        level="DEBUG",
+    )
+
     # Setting brightness is reduant when scheduled routines are running
     # as they will have already set the correct brightness
     # But this is nice when restarting during the evening
@@ -296,11 +308,6 @@ def bed_time():
     cool.duty_u16(0)
 
     time.sleep(diff_time(config.BED_TIME))
-
-    log_to_aws(
-        message="Starting bedtime mode",
-        level="DEBUG",
-    )
 
     for brightness, delay in generate_brightness_steps(
         start=1000, stop=250, duration=30 * 60
@@ -311,7 +318,7 @@ def bed_time():
     log_to_aws(message="Completed bedtime mode", level="DEBUG")
 
 
-def diff_time(ref_time: int, now: Optional[int] = None) -> int:
+def diff_time(ref_time: int, now=None) -> int:
     # Returns the number of seconds between now and the reference time,
     # Or 0 if it would be negative
     if now is None:

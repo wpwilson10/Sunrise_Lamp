@@ -4,10 +4,6 @@ WIFI_SSID = "wifi_name"
 # Password for the WiFi network.
 WIFI_PASSWORD = "wifi_password"
 
-# URLs
-# Address of the local server hosting manual override settings.
-LOCAL_SETTINGS_URL = "http://localhost:8080/settings.txt"
-
 # Latitude of the device's location, used for scheduling events based on local time.
 LATITUDE = 89.123
 # Longitude of the device's location.
