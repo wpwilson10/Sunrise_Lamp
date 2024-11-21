@@ -1,3 +1,4 @@
+from typing import Generator, Optional
 import network
 import urequests
 import machine
@@ -17,18 +18,24 @@ SUNSET_TIME_CALCULATED = config.SUNSET_TIME
 TIMEZONE_OFFSET_CALCULATED = config.TIMEZONE_OFFSET
 DST_OFFSET_CALCULATED = config.DST_OFFSET
 
+# Global variable to hold Wi-Fi connection
+wifi_connection = None
+
 
 def connect_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    if not wlan.isconnected():
-        # can't log if not connected
-        print("Connecting to network...")
-        wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
-        while not wlan.isconnected():
-            pass
+    global wifi_connection
+    if wifi_connection and wifi_connection.isconnected():
+        return  # Already connected
+
+    wifi_connection = network.WLAN(network.STA_IF)
+    wifi_connection.active(True)
+
+    while not wifi_connection.isconnected():
+        wifi_connection.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+        time.sleep(1)
+
     log_to_aws(message=f"Connected to network. SSID: {config.WIFI_SSID}", level="INFO")
-    log_to_aws(message=f"IP Address: {wlan.ifconfig()[0]}", level="INFO")
+    log_to_aws(message=f"IP Address: {wifi_connection.ifconfig()[0]}", level="INFO")
 
 
 def log_to_aws(message: str, level: str = "INFO") -> None:
@@ -166,6 +173,32 @@ def get_duty_for_brightness(v_out: float) -> int:
     return round(config.MAX_DUTY_CYCLE * v_out**2.2)
 
 
+def generate_brightness_steps(
+    start: int, stop: int, duration: int
+) -> Generator[tuple[int, float], None, None]:
+    """
+    Generates brightness values and delays for a smooth transition.
+
+    Args:
+        start (int): Starting brightness value.
+        stop (int): Ending brightness value (exclusive).
+        duration (int): Total transition duration in seconds.
+
+    Yields:
+        tuple[int, float]:
+            - Brightness value (int).
+            - Delay between steps in seconds (float).
+
+    Example:
+        for brightness, delay in generate_brightness_steps(250, 1000, 30):
+            set_brightness(brightness)
+            time.sleep(delay)
+    """
+    step_delay = duration / abs(stop - start)
+    for value in range(start, stop, 1 if start < stop else -1):
+        yield value, step_delay
+
+
 def night_light():
     # Dim warm light
     log_to_aws(
@@ -179,7 +212,6 @@ def night_light():
 
 def sunrise():
     # Warm lights increase to full warm brightness.
-    # 30 minute cycle
 
     # Start from night light settings
     cool.duty_u16(0)
@@ -192,9 +224,14 @@ def sunrise():
         level="DEBUG",
     )
 
-    for brightness in range(250, 1000, 1):
+    for brightness, delay in generate_brightness_steps(
+        start=250, stop=1000, duration=30 * 60
+    ):
+        # 30 minute cycle
         warm.duty_u16(get_duty_for_brightness(brightness / 1000))
-        time.sleep(2.4)  # 2.4 seconds * 750 steps = 30 minutes
+        time.sleep(seconds=delay)
+
+    log_to_aws(message="Completed sunrise mode", level="DEBUG")
 
 
 def daylight():
@@ -211,10 +248,14 @@ def daylight():
         level="DEBUG",
     )
 
-    for brightness in range(1000):
+    for brightness, delay in generate_brightness_steps(
+        start=0, stop=1000, duration=30 * 60
+    ):
         cool.duty_u16(get_duty_for_brightness(brightness / 1000))
         warm.duty_u16(get_duty_for_brightness(max(0.75, (1000 - brightness) / 1000)))
-        time.sleep(1.8)  # 1.8 seconds * 1000 steps = 30 minutes
+        time.sleep(delay)
+
+    log_to_aws(message="Completed daylight mode", level="DEBUG")
 
 
 def sunset():
@@ -234,10 +275,14 @@ def sunset():
         level="DEBUG",
     )
 
-    for brightness in range(1000):
-        cool.duty_u16(get_duty_for_brightness((1000 - brightness) / 1000))
-        warm.duty_u16(get_duty_for_brightness(max(0.75, brightness / 1000)))
-        time.sleep(1.8)  # 1.8 seconds * 1000 steps = 30 minutes
+    for brightness, delay in generate_brightness_steps(
+        start=1000, stop=0, duration=30 * 60
+    ):
+        cool.duty_u16(get_duty_for_brightness(brightness / 1000))
+        warm.duty_u16(get_duty_for_brightness(max(0.75, (1000 - brightness) / 1000)))
+        time.sleep(delay)
+
+    log_to_aws(message="Completed sunset mode", level="DEBUG")
 
 
 def bed_time():
@@ -257,38 +302,45 @@ def bed_time():
         level="DEBUG",
     )
 
-    for brightness in range(1000, 250, -1):
+    for brightness, delay in generate_brightness_steps(
+        start=1000, stop=250, duration=30 * 60
+    ):
         warm.duty_u16(get_duty_for_brightness(brightness / 1000))
-        time.sleep(2.4)  # 2.4 seconds * 750 = 30 minutes
+        time.sleep(delay)
+
+    log_to_aws(message="Completed bedtime mode", level="DEBUG")
 
 
-def diff_time(ref_time: int) -> int:
+def diff_time(ref_time: int, now: Optional[int] = None) -> int:
     # Returns the number of seconds between now and the reference time,
     # Or 0 if it would be negative
-    return max(0, ref_time - seconds_since_midnight())
+    if now is None:
+        now = seconds_since_midnight()
+    return max(0, ref_time - now)
 
 
 def run_scheduled_tasks():
     # Checks what the next day/night lighting cycle step will be and runs that routine.
     # Each routine has logic to wait until the correct time before starting after being called.
     # Run on startup and using a scheduled timer
+    now: int = seconds_since_midnight()
 
-    if diff_time(config.UPDATE_TIME):
+    if diff_time(ref_time=config.UPDATE_TIME, now=now):
         night_light()
         time.sleep(diff_time(config.UPDATE_TIME))
         update_current_time()
         update_sunset_time()
 
-    elif diff_time(config.SUNRISE_TIME):
+    elif diff_time(ref_time=config.SUNRISE_TIME, now=now):
         sunrise()
 
-    elif diff_time(config.DAYTIME_TIME):
+    elif diff_time(ref_time=config.DAYTIME_TIME, now=now):
         daylight()
 
-    elif diff_time(SUNSET_TIME_CALCULATED):
+    elif diff_time(ref_time=SUNSET_TIME_CALCULATED, now=now):
         sunset()
 
-    elif diff_time(config.BED_TIME):
+    elif diff_time(ref_time=config.BED_TIME, now=now):
         bed_time()
 
     else:
