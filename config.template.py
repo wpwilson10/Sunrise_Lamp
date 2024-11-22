@@ -4,10 +4,6 @@ WIFI_SSID = "wifi_name"
 # Password for the WiFi network.
 WIFI_PASSWORD = "wifi_password"
 
-# URLs
-# Address of the local server hosting manual override settings.
-LOCAL_SETTINGS_URL = "http://localhost:8080/settings.txt"
-
 # Latitude of the device's location, used for scheduling events based on local time.
 LATITUDE = 89.123
 # Longitude of the device's location.
@@ -42,3 +38,9 @@ MAX_DUTY_CYCLE = 65535  # Max duty cycle level for Pi Pico W
 WARM_LED_PIN = 10  # PWM enabled pin on Pi Pico W
 # GPIO pin for the cool LED.
 COOL_LED_PIN = 20  # PWM enabled pin on Pi Pico W
+
+# AWS
+# Address of the lambda function endpoint for posting logs
+AWS_LOG_URL = "https://xyz.lambda-url.us-east-1.on.aws/"
+# Shared secret token for authenticating access to endpoint
+AWS_SECRET_TOKEN = "my_secure_static_token_12345"
