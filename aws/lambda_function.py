@@ -11,8 +11,8 @@ import logging
 cloudwatch_logs_client = boto3.client("logs")
 
 # Define environment variables for the log group and stream
-LOG_GROUP_NAME: str = os.environ.get("LOG_GROUP_NAME", "/aws/lambda/WPW_SUNRISE_LAMP")
-LOG_STREAM_NAME: str = os.environ.get("LOG_STREAM_NAME", "Pi_Pico_Logs")
+LOG_GROUP_NAME: str = os.environ.get("LOG_GROUP_NAME", "Sunrise_Lamp")
+LOG_STREAM_NAME: str = os.environ.get("LOG_STREAM_NAME", "Default_Stream")
 
 # Logger for debugging
 logger = logging.getLogger()
@@ -38,7 +38,6 @@ def get_or_create_log_group_and_stream():
         logger.info(f"Log stream {LOG_STREAM_NAME} already exists.")
 
 
-# TODO - dict -> JSON does not work in micropython
 def log_to_cloudwatch(message, level):
     """
     Sends a log entry to CloudWatch Logs.
@@ -80,8 +79,8 @@ def lambda_handler(event, context):
         context (LambdaContext): The runtime information of the Lambda function.
     """
     # Check the custom header for the pre-shared token
-    # Lowercase is important for HTTP 2 protocol
     headers = event.get("headers", {})
+    # Lowercase is important for HTTP 2 protocol
     token = headers.get("x-custom-auth")
 
     # Validate the token

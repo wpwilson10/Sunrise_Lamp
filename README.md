@@ -22,4 +22,12 @@ The requirements-dev.txt is a recommended house keeping file from that process. 
 
 Copy the config.template.py into a config.py file in the root directory and update with preferred settings.
 
+## Logging to CloudWatch Logs
+
 For logging to AWS, there needs to be an AWS Lambda function configured with a URL endpoint and a secret token environment variable configured that matches the value in the config.py file.
+
+The lambda function requires environment variablese configured like:
+
+-   LOG_GROUP_NAME = /aws/lambda/SUNRISE_LAMP
+-   LOG_STREAM_NAME = Pi_Pico_Logs
+-   SECRET_TOKEN = Value matching AWS_SECRET_TOKEN from the config.py file
