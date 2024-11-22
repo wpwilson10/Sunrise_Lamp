@@ -1,9 +1,10 @@
 import network
-import urequests
+import requests
 import machine
 import ntptime
 import time
 import config
+import json
 
 # Setup Outputs and PWMs globally
 warm = machine.PWM(machine.Pin(config.WARM_LED_PIN))
@@ -34,8 +35,10 @@ def connect_wifi():
         wifi_connection.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
         time.sleep(5)
 
-    log_to_aws(message=f"Connected to network. SSID: {config.WIFI_SSID}", level="INFO")
-    log_to_aws(message=f"IP Address: {wifi_connection.ifconfig()[0]}", level="INFO")
+    log_to_aws(
+        message=f"Connected to network. SSID: {config.WIFI_SSID}. IP Address: {wifi_connection.ifconfig()[0]}",
+        level="INFO",
+    )
 
 
 def log_to_aws(message: str, level: str = "INFO") -> None:
@@ -46,26 +49,31 @@ def log_to_aws(message: str, level: str = "INFO") -> None:
         message (str): The log message to send.
         level (str): The log level (e.g., INFO, ERROR, DEBUG). Default is INFO.
     """
-    # Print to console for legibilty
+    # Print to console for legibility
     print(f"{level} | {message}")
 
     # Prepare the headers and payload
+    # Lowercase is important for HTTP 2 protocol
     headers: dict[str, str] = {
-        "Content-Type": "application/json",
-        "X-Custom-Auth": config.AWS_SECRET_TOKEN,
+        "content-type": "application/json",
+        "x-custom-auth": config.AWS_SECRET_TOKEN,
     }
     payload: dict[str, str] = {"message": message, "level": level}
 
     try:
-        # Send the POST request to the Lambda URL
-        response = urequests.post(config.AWS_LOG_URL, json=payload, headers=headers)
-        response.close()
+        # Convert payload to a JSON string
+        # MicroPython's requests module does not handle conversions automatically.
+        json_payload = json.dumps(payload)
+        # Send the POST request with the JSON string
+        response = requests.post(config.AWS_LOG_URL, data=json_payload, headers=headers)
+
         # Check the response status
         if response.status_code == 200:
-            print("Log sent successfully:", response.text)
+            response.close()
             return
         else:
             print("Failed to send log. Status code:", response.status_code)
+            response.close()
             return
     except Exception as e:
         print("Error sending log:", str(e))
@@ -82,9 +90,7 @@ def update_current_time():
 
         # get the timezone and daylight savings offsets from another API
         # https://worldtimeapi.org/pages/schema
-        response = urequests.get(
-            "https://worldtimeapi.org/api/timezone/America/Chicago"
-        )
+        response = requests.get("https://worldtimeapi.org/api/timezone/America/Chicago")
         data = response.json()
         response.close()
 
@@ -94,9 +100,10 @@ def update_current_time():
         TIMEZONE_OFFSET_CALCULATED = data["raw_offset"]
         DST_OFFSET_CALCULATED = data["dst_offset"]
 
-        log_to_aws(message=f"UTC: {time.time()}", level="INFO")
-        log_to_aws(message=f"TZ Offset: {TIMEZONE_OFFSET_CALCULATED}", level="INFO")
-        log_to_aws(message=f"DST Offset: {DST_OFFSET_CALCULATED}", level="INFO")
+        log_to_aws(
+            message=f"UTC: {time.time()}. TZ Offset: {TIMEZONE_OFFSET_CALCULATED}. DST Offset: {DST_OFFSET_CALCULATED}",
+            level="INFO",
+        )
     except Exception as e:
         log_to_aws(
             message=f"Failed to fetch or parse time from API: {e}", level="ERROR"
@@ -115,7 +122,7 @@ def update_sunset_time():
     )
 
     try:
-        response = urequests.get(url)
+        response = requests.get(url)
         data = response.json()
         response.close()
 
@@ -138,8 +145,10 @@ def update_sunset_time():
             sunset_seconds = hours * 3600 + minutes * 60 + seconds
 
             SUNSET_TIME_CALCULATED = max(config.SUNSET_TIME, sunset_seconds)
-            log_to_aws(message=f"Real Sunset time: {sunset_seconds}", level="INFO")
-            log_to_aws(message=f"SUNSET_TIME: {SUNSET_TIME_CALCULATED}", level="INFO")
+            log_to_aws(
+                message=f"Real Sunset time: {sunset_seconds}. SUNSET_TIME_CALCULATED: {SUNSET_TIME_CALCULATED}",
+                level="INFO",
+            )
         else:
             log_to_aws(
                 message="Failed to fetch or parse time from api.sunrise-sunset.org.",
@@ -154,13 +163,7 @@ def seconds_since_midnight() -> int:
     # using previously set RTC and corrections
 
     corrected_time = time.time() + TIMEZONE_OFFSET_CALCULATED + DST_OFFSET_CALCULATED
-    print("time", time.time())
-    print(TIMEZONE_OFFSET_CALCULATED, DST_OFFSET_CALCULATED)
-    print("Corrected time:", corrected_time)
-
     local_time = time.localtime(corrected_time)
-    print("Local time:", local_time)
-
     seconds_since_midnight: int = (
         local_time[3] * 3600 + local_time[4] * 60 + local_time[5]
     )
@@ -169,7 +172,6 @@ def seconds_since_midnight() -> int:
         message=f"Current time in seconds since midnight: {seconds_since_midnight}",
         level="DEBUG",
     )
-
     return seconds_since_midnight
 
 
