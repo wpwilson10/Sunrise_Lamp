@@ -1,7 +1,5 @@
 import os
 import json
-
-import json
 import os
 import boto3
 import time
