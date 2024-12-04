@@ -8,3 +8,14 @@ terraform {
     }
   }
 }
+
+provider "aws" {
+  region  = var.region
+  profile = var.credentials_profile
+
+  default_tags {
+    tags = {
+      Terraform = "True"
+    }
+  }
+}

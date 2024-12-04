@@ -31,7 +31,7 @@ variable "log_stream_name" {
 }
 
 variable "log_trigger_name" {
-  description = "Named used for AWS CloudWatch Trigger Log Trigger to call Lambda function for error handling"
+  description = "Named used for AWS CloudWatch Log Trigger to call Lambda function for error handling"
   type        = string
   default     = "Error_Log_Trigger"
 }
@@ -39,4 +39,5 @@ variable "log_trigger_name" {
 variable "secret_token" {
   description = "Shared secret token used to authenticate calls form microcontroller to AWS"
   type        = string
+  default     = "my_secure_static_token_12345"
 }
