@@ -64,6 +64,7 @@ def lambda_handler(event, context):
 
     # Validate the token
     if token != os.environ.get("SECRET_TOKEN"):
+        logger.info("Denied unauthorized request")
         return {"statusCode": 403, "body": "Unauthorized"}
 
     # Parse the incoming request body
