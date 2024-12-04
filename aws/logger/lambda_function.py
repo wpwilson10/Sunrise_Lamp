@@ -1,7 +1,5 @@
 import os
 import json
-
-import json
 import os
 import boto3
 import time
@@ -17,25 +15,6 @@ LOG_STREAM_NAME: str = os.environ.get("LOG_STREAM_NAME", "Default_Stream")
 # Logger for debugging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-def get_or_create_log_group_and_stream():
-    """Ensures the log group and stream exist in CloudWatch Logs."""
-    try:
-        # Ensure the log group exists
-        cloudwatch_logs_client.create_log_group(logGroupName=LOG_GROUP_NAME)
-        logger.info(f"Created log group: {LOG_GROUP_NAME}")
-    except cloudwatch_logs_client.exceptions.ResourceAlreadyExistsException:
-        logger.info(f"Log group {LOG_GROUP_NAME} already exists.")
-
-    try:
-        # Ensure the log stream exists
-        cloudwatch_logs_client.create_log_stream(
-            logGroupName=LOG_GROUP_NAME, logStreamName=LOG_STREAM_NAME
-        )
-        logger.info(f"Created log stream: {LOG_STREAM_NAME}")
-    except cloudwatch_logs_client.exceptions.ResourceAlreadyExistsException:
-        logger.info(f"Log stream {LOG_STREAM_NAME} already exists.")
 
 
 def log_to_cloudwatch(message, level):
@@ -85,9 +64,8 @@ def lambda_handler(event, context):
 
     # Validate the token
     if token != os.environ.get("SECRET_TOKEN"):
+        logger.info("Denied unauthorized request")
         return {"statusCode": 403, "body": "Unauthorized"}
-
-    get_or_create_log_group_and_stream()
 
     # Parse the incoming request body
     try:
