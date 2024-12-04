@@ -10,6 +10,8 @@ The AWS code uses Lambda functions to receive the log message from the microcont
 
 Briefly, the microcontoller acts as a client and sends logs via an HTTPS Post request to a Lambda URL endpoint. This first Lambda function verifies the source and saves the log to CloudWatch logs. Then a CloudWatch Log subscription filter checks for logs containing "ERROR" and sends them to a second Lambda function. This second Lambda function forwards the log to SNS where it gets sent via email to a recepient.
 
+![alt text](https://d2908q01vomqb2.cloudfront.net/972a67c48192728a34979d9a35164c1295401b71/2020/08/10/customlambdaerror_arch.png)
+
 Included Terraform configurations is used to fully automate the AWS build.
 
 ## Setup
@@ -20,12 +22,12 @@ An AWS account must exist and credentials configured as described [here](https:/
 
 1. Create a terraform.tfvars file in ./terraform to configure the AWS build. See variables.tf for more information. Review the locals variables in main.terraform if performing significant code changes.
     - Required variables:
-        - sns_destination_email: this email will need to be verified using an automatic verification email before it can receive notifications.
-        - secret_token: this should match AWS_SECRET_TOKEN below
+        - sns_destination_email - this email will need to be verified using an automatic verification email before it can receive notifications.
+        - secret_token - this should match AWS_SECRET_TOKEN below
 2. Copy the microcontroller/config.template.py into a config.py file and update with preferred settings.
     - Required variables:
-        - AWS_LOG_URL: this should match the given output URL from the Terraform AWS build
-        - AWS_SECRET_TOKEN: this should match secret_token above
+        - AWS_LOG_URL - this should match the given output URL from the Terraform AWS build
+        - AWS_SECRET_TOKEN - this should match secret_token above
         - WIFI_SSID
         - WIFI_PASSWORD
 
@@ -33,9 +35,11 @@ An AWS account must exist and credentials configured as described [here](https:/
 
 Once the configuration above is complete, run the following commands from the ./terraform directory.
 
-`terraform init`
-`terraform plan`
-`terraform apply`
+```
+terraform init
+terraform plan
+terraform apply
+```
 
 ### Pi Pico
 
