@@ -1,47 +1,43 @@
 # Sunrise_Lamp
 
-MicroPython, AWS Lambda function code, and Terraform configuration for a Pi Pico W to run LED lights with a configurable day/night cycle via integration with AWS services.
+MicroPython code for implementing an LED lighting control system using a Pi Pico W to simulate natural lighting cycles.
 
 ## Description
 
-The MicroPython code runs on the Pi Pico W to control the LED lights, access scheduling information for controlling the day/night cycle, and logging information back to AWS.
+This project implements a smart lighting control system designed to simulate natural lighting cycles. The system controls two LED channels (warm and cool), transitions smoothly between lighting states, and integrates with cloud services for logging. It uses a microcontroller (e.g., Raspberry Pi Pico W) running MicroPython.
 
-The AWS code uses Lambda functions to receive the log message from the microcontroller and send notifications when an error occurs. The architecture is based on [this AWS guide](https://aws.amazon.com/blogs/mt/get-notified-specific-lambda-function-error-patterns-using-cloudwatch/).
+### Features
 
-Briefly, the microcontoller acts as a client and sends logs via an HTTPS Post request to a Lambda URL endpoint. This first Lambda function verifies the source and saves the log to CloudWatch logs. Then a CloudWatch Log subscription filter checks for logs containing "ERROR" and sends them to a second Lambda function. This second Lambda function forwards the log to SNS where it gets sent via email to a recepient.
+Smooth brightness transitions for warm and cool LEDs simulating sunrise and sunset.
 
-![alt text](https://d2908q01vomqb2.cloudfront.net/972a67c48192728a34979d9a35164c1295401b71/2020/08/10/customlambdaerror_arch.png)
+Automatically calculates sunset and timezone offsets using internet APIs given the configured coordinate location.
 
-Included Terraform configurations is used to fully automate the AWS build.
+Multiple lighting modes:
+
+-   night light: consistent dim warm lighting
+-   sunrise: warm lights increase in brightness
+-   daylight: cool lights power on and increase to full brightness
+-   sunset: cool lights dim until just warm lights are powered
+-   bedtime: warm lights dim
+
+Scheduled tasks to update lighting modes dynamically.
+
+Logs events and errors to AWS via a URL endpoint.
 
 ## Setup
 
 ### Configuration
 
-An AWS account must exist and credentials configured as described [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
+Copy the microcontroller/config.template.py into a config.py file and update with preferred settings.
 
-1. Create a terraform.tfvars file in ./terraform to configure the AWS build. See variables.tf for more information. Review the locals variables in main.terraform if performing significant code changes.
-    - Required variables:
-        - sns_destination_email - this email will need to be verified using an automatic verification email before it can receive notifications.
-        - secret_token - this should match AWS_SECRET_TOKEN below
-2. Copy the microcontroller/config.template.py into a config.py file and update with preferred settings.
-    - Required variables:
-        - AWS_LOG_URL - this should match the given output URL from the Terraform AWS build
-        - AWS_SECRET_TOKEN - this should match secret_token above
-        - WIFI_SSID
-        - WIFI_PASSWORD
+Required variables:
 
-### AWS using Terraform
+-   AWS_LOG_URL - the API endpoint that logs messages from the microcontroller
+-   AWS_SECRET_TOKEN - this should match secret_token above
+-   WIFI_SSID
+-   WIFI_PASSWORD
 
-Once the configuration above is complete, run the following commands from the ./terraform directory.
-
-```
-terraform init
-terraform plan
-terraform apply
-```
-
-### Pi Pico
+### Pi Pico Installation
 
 Use Thonny to upload the main.py and config.py files to the microcontroller. Setup guide [here](https://projects.raspberrypi.org/en/projects/getting-started-with-the-pico/2). There are no good VSCode extensions at this time that can reliably connect and manage files.
 
