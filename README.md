@@ -33,7 +33,7 @@ Copy the microcontroller/config.template.py into a config.py file and update wit
 Required variables:
 
 -   AWS_LOG_URL - the API endpoint that logs messages from the microcontroller
--   AWS_SECRET_TOKEN - this should match secret_token above
+-   AWS_SECRET_TOKEN - secret token used by Logging URL
 -   WIFI_SSID
 -   WIFI_PASSWORD
 
@@ -52,3 +52,7 @@ The requirements-dev.txt is a recommended house keeping file from that process. 
 ## Issues
 
 When the Pi Pico gets stuck in a bootloop or otherwise refuses to connect, use the [flash_nuke.uf2](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html#resetting-flash-memory) option to clear the memory.
+
+## Attribution
+
+Sunrise and sunset time calculated using https://sunrise-sunset.org/api.
